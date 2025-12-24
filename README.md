@@ -1,110 +1,137 @@
-# FHEVM Hardhat Template
+# Encrypted Fund
 
-A Hardhat-based template for developing Fully Homomorphic Encryption (FHE) enabled Solidity smart contracts using the
-FHEVM protocol by Zama.
+Encrypted Fund is a privacy-preserving fundraising dapp built on Zama FHEVM. It lets a creator configure a fundraiser
+and accept encrypted fETH contributions so individual amounts stay private while the total is computed on-chain.
 
-## Quick Start
+## Goals and Scope
+- Private contribution amounts with transparent lifecycle and access control.
+- Simple, single-campaign contract per deployment.
+- Testnet-first experience using a confidential ERC7984 token.
 
-For detailed instructions see:
-[FHEVM Hardhat Quick Start Tutorial](https://docs.zama.ai/protocol/solidity-guides/getting-started/quick-start-tutorial)
+## Problems This Solves
+- Public blockchains expose contribution sizes and enable unwanted profiling.
+- Off-chain tracking of contributions is error-prone and easy to manipulate.
+- Donors may be pressured by public contribution history.
+- Standard crowdfunding contracts cannot compute totals without revealing amounts.
+
+## How It Works
+1. The creator deploys `EncryptedFund` with the `FHEETH` token address.
+2. The creator configures name, goal, and end time exactly once.
+3. Contributors submit encrypted amounts via `confidentialTransferFrom`.
+4. The contract updates encrypted per-user totals and the encrypted aggregate.
+5. The creator can close at any time and withdraw the encrypted total.
+
+## Advantages
+- Privacy by default: all amounts are encrypted `euint64`.
+- Verifiable totals: aggregation happens on-chain without decryption.
+- Minimal metadata leakage: only addresses and timestamps are public.
+- Standards-based: ERC7984 confidential token interface.
+- No off-chain database or trusted server.
+
+## Smart Contracts
+
+### EncryptedFund
+- `configureFund(name, goal, endTime)`: one-time configuration by the creator.
+- `contribute(encryptedAmount, inputProof)`: encrypted contribution using ERC7984.
+- `closeFund()`: creator-only close and withdrawal.
+- Read-only getters: `getFundName`, `getFundGoal`, `getFundEndTime`, `getTotalRaised`, `getContribution`, `isActive`.
+- State flags: `isConfigured`, `isClosed`.
+
+### FHEETH
+- Confidential ERC7984 token used for testnet/demo flows.
+- `mint(to, amount)` is unrestricted and intended for testnet use only.
+
+### Privacy and Access Control
+- `FHE.allow` gives the contributor access to their own encrypted total.
+- `FHE.allow` gives the creator access to the total raised.
+- `getContribution` and `getTotalRaised` return encrypted values and require FHE-aware tooling to decode.
+
+### Known Limitations
+- The goal is informational only; it does not cap contributions.
+- The creator can close before the end time.
+- No refund path exists once funds are contributed.
+- One fundraiser per deployment (no factory yet).
+
+## Frontend
+- Located in `app/` and built with React + Vite.
+- Read calls use `viem`; write calls use `ethers`.
+- Wallet connections use RainbowKit + wagmi.
+- Contract addresses and ABIs are generated into `app/src/config/contracts.ts` during Sepolia deployment.
+- No frontend environment variables and no local storage usage.
+- Not intended for localhost networks; use Sepolia with the generated config.
+
+## Tech Stack
+- Solidity 0.8.x, Hardhat, hardhat-deploy
+- Zama FHEVM (`@fhevm/solidity`)
+- OpenZeppelin confidential contracts (ERC7984)
+- React, Vite, viem, ethers, RainbowKit, wagmi
+
+## Project Structure
+```
+app/            Frontend (React + Vite)
+contracts/      Solidity contracts
+deploy/         Deployment scripts
+tasks/          Hardhat tasks
+test/           Hardhat tests
+```
+
+## Development
 
 ### Prerequisites
+- Node.js 20+
+- npm 7+
 
-- **Node.js**: Version 20 or higher
-- **npm or yarn/pnpm**: Package manager
-
-### Installation
-
-1. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-2. **Set up environment variables**
-
-   ```bash
-   npx hardhat vars set MNEMONIC
-
-   # Set your Infura API key for network access
-   npx hardhat vars set INFURA_API_KEY
-
-   # Optional: Set Etherscan API key for contract verification
-   npx hardhat vars set ETHERSCAN_API_KEY
-   ```
-
-3. **Compile and test**
-
-   ```bash
-   npm run compile
-   npm run test
-   ```
-
-4. **Deploy to local network**
-
-   ```bash
-   # Start a local FHEVM-ready node
-   npx hardhat node
-   # Deploy to local network
-   npx hardhat deploy --network localhost
-   ```
-
-5. **Deploy to Sepolia Testnet**
-
-   ```bash
-   # Deploy to Sepolia
-   npx hardhat deploy --network sepolia
-   # Verify contract on Etherscan
-   npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
-   ```
-
-6. **Test on Sepolia Testnet**
-
-   ```bash
-   # Once deployed, you can run a simple test on Sepolia.
-   npx hardhat test --network sepolia
-   ```
-
-## 📁 Project Structure
-
-```
-fhevm-hardhat-template/
-├── contracts/           # Smart contract source files
-│   └── FHECounter.sol   # Example FHE counter contract
-├── deploy/              # Deployment scripts
-├── tasks/               # Hardhat custom tasks
-├── test/                # Test files
-├── hardhat.config.ts    # Hardhat configuration
-└── package.json         # Dependencies and scripts
+### Install Dependencies
+```bash
+npm install
 ```
 
-## 📜 Available Scripts
+### Compile and Test Contracts
+```bash
+npm run compile
+npm run test
+```
 
-| Script             | Description              |
-| ------------------ | ------------------------ |
-| `npm run compile`  | Compile all contracts    |
-| `npm run test`     | Run all tests            |
-| `npm run coverage` | Generate coverage report |
-| `npm run lint`     | Run linting checks       |
-| `npm run clean`    | Clean build artifacts    |
+### Local Contract Development (optional)
+```bash
+npm run chain
+npm run deploy:localhost
+```
 
-## 📚 Documentation
+## Deployment to Sepolia
+1. Create a `.env` file with:
+   - `PRIVATE_KEY` (deploy key)
+   - `INFURA_API_KEY` (RPC access)
+   - `ETHERSCAN_API_KEY` (optional, for verification)
+2. Run tests and any required tasks before deployment.
+3. Deploy:
+   ```bash
+   npm run deploy:sepolia
+   ```
+4. The deploy script writes `app/src/config/contracts.ts` with Sepolia addresses and ABIs from
+   `deployments/sepolia`.
 
-- [FHEVM Documentation](https://docs.zama.ai/fhevm)
-- [FHEVM Hardhat Setup Guide](https://docs.zama.ai/protocol/solidity-guides/getting-started/setup)
-- [FHEVM Testing Guide](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat/write_test)
-- [FHEVM Hardhat Plugin](https://docs.zama.ai/protocol/solidity-guides/development-guide/hardhat)
+## Frontend Usage
+```bash
+cd app
+npm install
+npm run dev
+```
 
-## 📄 License
+## Testing Notes
+- Contract tests live in `test/`.
+- Sepolia tests can be run with:
+  ```bash
+  npm run test:sepolia
+  ```
 
-This project is licensed under the BSD-3-Clause-Clear License. See the [LICENSE](LICENSE) file for details.
+## Future Roadmap
+- Enforce fundraising goal caps and automatic closure rules.
+- Optional refund and grace-period mechanics.
+- Multi-campaign factory contract and improved lifecycle events.
+- Privacy-preserving analytics and contributor dashboards.
+- More robust relayer UX and error handling.
+- Security review and formal verification of core logic.
 
-## 🆘 Support
-
-- **GitHub Issues**: [Report bugs or request features](https://github.com/zama-ai/fhevm/issues)
-- **Documentation**: [FHEVM Docs](https://docs.zama.ai)
-- **Community**: [Zama Discord](https://discord.gg/zama)
-
----
-
-**Built with ❤️ by the Zama team**
+## License
+BSD-3-Clause-Clear
